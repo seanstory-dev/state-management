@@ -1,81 +1,104 @@
 const { createStore, compose, applyMiddleware } = require("redux");
 
-const LOG_IN = "LOG_IN";
-const LOG_OUT = "LOG_OUT";
-const ADD_POST = "ADD_POST";
+const LOG_IN_REQUEST = "LOG_IN_REQUEST";
+const LOG_IN_SUCCESS = "LOG_IN_SUCCESS";
+const LOG_IN_FAILURE = "LOG_IN_FAILURE";
 
 const reducer = (prevState, action) => {
   switch (action.type) {
-    case LOG_IN:
+    case LOG_IN_REQUEST:
       return {
         ...prevState,
-        user: action.data,
+        isLoggingIn: true,
       };
-    case LOG_OUT:
+    case LOG_IN_SUCCESS:
       return {
         ...prevState,
-        user: null,
+        isLoggingIn: false,
+        data: action.data,
       };
-    case ADD_POST:
+    case LOG_IN_FAILURE:
       return {
         ...prevState,
-        posts: [...prevState.posts, action.data],
+        isLoggingIn: false,
+        error: action.error,
       };
     default:
       return prevState;
   }
 };
 const initialState = {
-  user: null,
+  user: {
+    isLoggingIn: false,
+    data: null,
+    error: null,
+  },
   posts: [],
 };
 const firstMiddleware = (store) => (dispatch) => (action) => {
+  /* 확장성이 뛰어난 커링 방식 */
   console.log("ACTION-LOG", action);
   // 기능 추가
   dispatch(action);
   // 기능 추가
 };
-const enhancer = compose(applyMiddleware(firstMiddleware));
+const thunkMiddleware = (store) => (dispatch) => (action) => {
+  if (typeof action === "function") {
+    // 비동기인 경우 action을 함수로 만들어주겠다.
+    return action(store.dispatch, store.getState); // 순서 상관 없음
+  }
+  return dispatch(action);
+};
+const enhancer = compose(applyMiddleware(firstMiddleware, thunkMiddleware));
 const store = createStore(reducer, initialState, enhancer);
 
 console.log("1st", store.getState());
 
-/* action creator */
-const logIn = (data) => {
+/* async action creator */
+const logInAsync = (data) => {
+  return (dispatch, getState) => {
+    /* async action */
+    dispatch(logInRequest(data));
+    try {
+      setTimeout(() => {
+        dispatch(
+          logInSuccess({
+            id: 1,
+            name: "Sean",
+            admin: true,
+          })
+        );
+      }, 2000);
+    } catch (e) {
+      dispatch(logInFailure(e));
+    }
+  };
+};
+
+const logInRequest = (data) => {
   return {
-    type: LOG_IN,
+    type: LOG_IN_REQUEST,
     data,
   };
 };
-const logOut = () => {
+const logInSuccess = (data) => {
   return {
-    type: LOG_OUT,
+    type: LOG_IN_SUCCESS,
+    data,
   };
 };
-const addPost = (data) => {
+const logInFailure = (error) => {
   return {
-    type: ADD_POST,
-    data,
+    type: LOG_IN_FAILURE,
+    error,
   };
 };
 
 store.dispatch(
-  logIn({
+  logInAsync({
     id: 1,
     name: "Sean",
     admin: true,
   })
 );
 console.log("2nd", store.getState());
-
-store.dispatch(
-  addPost({
-    userId: 1,
-    id: 1,
-    content: "반가워!",
-  })
-);
-console.log("3rd", store.getState());
-
-store.dispatch(logOut());
-console.log("4th", store.getState());
